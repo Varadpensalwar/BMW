@@ -1,0 +1,763 @@
+:root {
+  --neon-blue:   #00f3ff;
+  --neon-pink:   #ff00ff;
+  --neon-green:  #39ff14;
+  --neon-orange: #ff7f00;
+  --neon-yellow: #ffff00;
+  --neon-red:    #ff073a;
+  --neon-purple: #b200ff;
+  --neon-cyan:   #00ffee;
+  --neon-lime:   #aaff00;
+  --neon-teal:   #00ffaa;
+  --neon-rose:   #ff007f;
+  
+  /* NEW NEON COLORS */
+  --neon-violet: #8a2be2;
+  --neon-coral:  #ff6b47;
+  --neon-mint:   #00ff9f;
+  --neon-gold:   #ffd700;
+  --neon-indigo: #4b0082;
+  --neon-magenta: #ff1493;
+  --neon-turquoise: #40e0d0;
+  --neon-lavender: #e6e6fa;
+  --neon-chartreuse: #7fff00;
+  --neon-crimson: #dc143c;
+  --neon-aqua: #00ffff;
+  --neon-salmon: #ff69b4;
+  --neon-electric-blue: #7df9ff;
+  --neon-hot-pink: #ff1493;
+  --neon-spring-green: #00ff7f;
+  
+  --card-width: 300px;
+  --mobile-width: 74.7mm;
+  --mobile-height: 161.7mm;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #000;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: 'Arial', sans-serif;
+  position: relative;
+}
+
+.bg-animation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  opacity: 0.3;
+  /* we'll toggle display in JS on mobile */
+}
+
+.bg-animation span {
+  position: absolute;
+  border-radius: 50%;
+  animation: float 15s linear infinite;
+  opacity: 0.3;
+  filter: blur(4px);
+  /* add a glow shadow around each blob */
+  box-shadow:
+    0 0 10px currentColor,
+    0 0 20px currentColor,
+    0 0 30px currentColor;
+}
+
+/* Enhanced float animation with multiple color variations */
+@keyframes float {
+  0% {
+    transform: translateY(0) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateY(-100vh) translateX(100vw) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.video-wall {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-width), 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+  max-width: 2000px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.video-card {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.5s ease, box-shadow 0.5s ease;
+  transform: scale(0.98);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  background-color: #000;
+  aspect-ratio: 16/9;
+}
+
+.video-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 0 20px var(--neon-cyan);
+}
+
+.video-card.active {
+  transform: scale(1.05);
+  box-shadow: 0 0 40px var(--neon-coral);
+  z-index: 10;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(0.5);
+  transition: filter 0.3s ease;
+}
+
+.video-card.active video {
+  filter: grayscale(0);
+}
+
+.card-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(45deg, rgba(0,0,0,0.7), transparent);
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.video-card.active .card-overlay {
+  opacity: 0;
+}
+
+.progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 0%;
+  background: var(--neon-blue);
+  z-index: 3;
+  transition: width 0.1s linear;
+}
+
+.video-card.active .progress-bar {
+  background: linear-gradient(90deg, 
+    var(--neon-blue), 
+    var(--neon-pink), 
+    var(--neon-green), 
+    var(--neon-orange), 
+    var(--neon-purple),
+    var(--neon-cyan)
+  );
+  animation: progressGlow 3s infinite;
+}
+
+@keyframes progressGlow {
+  0% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.5) saturate(1.5); }
+  100% { filter: brightness(1) saturate(1); }
+}
+
+.model-info {
+  position: absolute;
+  bottom: 15px;
+  left: 15px;
+  color: white;
+  font-weight: bold;
+  text-shadow: 0 0 5px rgba(0,0,0,0.8);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 2;
+}
+
+.video-card.active .model-info {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Easter Egg Button */
+.easter-egg-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 40px;
+  height: 40px;
+  background-color: #111;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  z-index: 100;
+  opacity: 0.5;
+  transition: all 0.3s ease;
+}
+
+.easter-egg-button:hover {
+  opacity: 1;
+  box-shadow: 0 0 10px var(--neon-blue);
+}
+
+.easter-egg-button span {
+  color: var(--neon-blue);
+  font-size: 24px;
+}
+
+/* Enhanced Easter Egg Animation with ALL NEON COLORS */
+.easter-egg-active .video-card:not(.active) {
+  animation: rainbowShift 4s infinite;
+}
+
+@keyframes rainbowShift {
+  0% { box-shadow: 0 0 20px var(--neon-blue); }
+  6.25% { box-shadow: 0 0 20px var(--neon-pink); }
+  12.5% { box-shadow: 0 0 20px var(--neon-green); }
+  18.75% { box-shadow: 0 0 20px var(--neon-orange); }
+  25% { box-shadow: 0 0 20px var(--neon-yellow); }
+  31.25% { box-shadow: 0 0 20px var(--neon-red); }
+  37.5% { box-shadow: 0 0 20px var(--neon-purple); }
+  43.75% { box-shadow: 0 0 20px var(--neon-cyan); }
+  50% { box-shadow: 0 0 20px var(--neon-lime); }
+  56.25% { box-shadow: 0 0 20px var(--neon-teal); }
+  62.5% { box-shadow: 0 0 20px var(--neon-rose); }
+  68.75% { box-shadow: 0 0 20px var(--neon-coral); }
+  75% { box-shadow: 0 0 20px var(--neon-mint); }
+  81.25% { box-shadow: 0 0 20px var(--neon-gold); }
+  87.5% { box-shadow: 0 0 20px var(--neon-magenta); }
+  93.75% { box-shadow: 0 0 20px var(--neon-spring-green); }
+  100% { box-shadow: 0 0 20px var(--neon-electric-blue); }
+}
+
+/* Additional animation for even more variety */
+.easter-egg-active .video-card:hover {
+  animation: multiColorPulse 2s infinite ease-in-out;
+}
+
+@keyframes multiColorPulse {
+  0% { 
+    box-shadow: 0 0 30px var(--neon-blue), 0 0 50px var(--neon-pink); 
+    transform: scale(1.02);
+  }
+  25% { 
+    box-shadow: 0 0 30px var(--neon-green), 0 0 50px var(--neon-orange); 
+    transform: scale(1.04);
+  }
+  50% { 
+    box-shadow: 0 0 30px var(--neon-purple), 0 0 50px var(--neon-cyan); 
+    transform: scale(1.06);
+  }
+  75% { 
+    box-shadow: 0 0 30px var(--neon-yellow), 0 0 50px var(--neon-red); 
+    transform: scale(1.04);
+  }
+  100% { 
+    box-shadow: 0 0 30px var(--neon-blue), 0 0 50px var(--neon-pink); 
+    transform: scale(1.02);
+  }
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .bg-animation {
+      display: none !important;
+  }
+  
+  .video-wall {
+      grid-template-columns: 1fr;
+      padding: 0;
+      gap: 0;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+  }
+  
+  .video-card {
+      width: var(--mobile-width);
+      height: var(--mobile-height);
+      max-width: 90vw;
+      max-height: 90vh;
+      border-radius: 12px;
+      aspect-ratio: unset;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      margin: 0;
+      opacity: 0;
+      visibility: hidden;
+  }
+  
+  .video-card.active {
+      opacity: 1;
+      visibility: visible;
+      transform: translate(-50%, -50%) scale(1);
+  }
+  
+  .video-wrapper {
+      height: 100%;
+  }
+  
+  video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #000;
+  }
+}
+
+/* Play/Pause Button Styles */
+.play-pause-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 4;
+  pointer-events: none; /* Allow clicks to pass through to the card */
+}
+
+.play-pause-overlay.show-controls {
+  opacity: 1;
+}
+
+.video-card:hover .play-pause-overlay {
+  opacity: 1;
+}
+
+.play-pause-button {
+  width: 60px;
+  height: 60px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 15px;
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.video-card:hover .play-pause-button {
+  transform: scale(1.1);
+  box-shadow: 0 0 20px var(--neon-cyan);
+}
+
+/* For mobile, make the button a bit larger and more opaque */
+@media (max-width: 768px) {
+  .play-pause-button {
+    width: 70px;
+    height: 70px;
+    background-color: rgba(0, 0, 0, 0.7);
+  }
+  
+  /* Always show controls briefly when switching videos on mobile */
+  .video-card.active .play-pause-overlay {
+    opacity: 1;
+  }
+  
+  /* Add a transition delay for mobile to ensure controls are visible long enough */
+  .play-pause-overlay {
+    transition: opacity 0.5s ease;
+  }
+}
+
+/* Install Prompt Styles - Enhanced with more neon colors */
+.install-prompt {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 15px;
+  animation: bounceUp 0.7s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  font-family: 'Poppins', 'Segoe UI', sans-serif;
+}
+
+.install-prompt-content {
+  background: linear-gradient(135deg, 
+    var(--neon-purple), 
+    var(--neon-pink), 
+    var(--neon-blue),
+    var(--neon-cyan)
+  );
+  border-radius: 18px;
+  padding: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 
+              0 0 20px var(--neon-blue),
+              0 0 10px var(--neon-pink);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  animation: installGlow 3s infinite ease-in-out;
+}
+
+@keyframes installGlow {
+  0% { 
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 
+                0 0 20px var(--neon-blue),
+                0 0 10px var(--neon-pink);
+  }
+  33% { 
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 
+                0 0 20px var(--neon-green),
+                0 0 10px var(--neon-orange);
+  }
+  66% { 
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 
+                0 0 20px var(--neon-purple),
+                0 0 10px var(--neon-cyan);
+  }
+  100% { 
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 
+                0 0 20px var(--neon-blue),
+                0 0 10px var(--neon-pink);
+  }
+}
+
+/* Funky background pattern */
+.install-prompt-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.15) 0%, transparent 25%),
+    radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.15) 0%, transparent 25%);
+  pointer-events: none;
+}
+
+/* Animated decorative elements */
+.install-prompt-content::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  right: -50px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  filter: blur(5px);
+  animation: floatBubble 6s infinite alternate ease-in-out;
+}
+
+.install-prompt-icon {
+  background: linear-gradient(45deg, 
+    var(--neon-blue), 
+    var(--neon-purple),
+    var(--neon-pink)
+  );
+  border-radius: 20px;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  transform: rotate(-5deg);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+.install-prompt-icon::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  background: linear-gradient(45deg, 
+    var(--neon-orange), 
+    var(--neon-pink), 
+    var(--neon-purple), 
+    var(--neon-blue),
+    var(--neon-green),
+    var(--neon-cyan)
+  );
+  background-size: 400% 400%;
+  border-radius: 22px;
+  z-index: -1;
+  filter: blur(4px);
+  opacity: 0.7;
+  animation: iconGlow 3s infinite linear;
+}
+
+@keyframes iconGlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.install-prompt-icon svg {
+  width: 32px;
+  height: 32px;
+  color: white;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  animation: pulse 2s infinite;
+}
+
+.install-prompt-text {
+  text-align: center;
+  margin-bottom: 20px;
+  color: white;
+  position: relative;
+  z-index: 1;
+}
+
+.install-prompt-text h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 700;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  letter-spacing: 0.5px;
+  background: linear-gradient(to right, #ffffff, #f0f0f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.install-prompt-text p {
+  margin: 0;
+  font-size: 16px;
+  opacity: 0.95;
+  line-height: 1.5;
+  max-width: 280px;
+  margin: 0 auto;
+}
+
+.install-prompt-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+}
+
+.install-btn {
+  background: linear-gradient(to right, #ffffff, #f0f0f0);
+  color: var(--neon-purple);
+  border: none;
+  border-radius: 30px;
+  padding: 12px 30px;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.install-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: 0.5s;
+}
+
+.install-btn:hover::before {
+  left: 100%;
+}
+
+.install-btn:hover, .install-btn:active {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.install-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.close-btn {
+  position: absolute;
+  top: -40px;
+  right: -5px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.9);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(5px);
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: rotate(90deg);
+}
+
+.close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Funky Animations */
+@keyframes bounceUp {
+  0% {
+    transform: translateY(120%);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes floatBubble {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    transform: translate(-20px, 20px) scale(1.2);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* For iOS Safari-specific instructions */
+@media (display-mode: browser) {
+  .ios-specific-instructions {
+    display: block;
+  }
+}
+
+@media (display-mode: standalone) {
+  .install-prompt {
+    display: none;
+  }
+}
+
+/* Make sure the prompt is displayed properly on different screen sizes */
+@media (max-width: 480px) {
+  .install-prompt {
+    padding: 10px;
+  }
+  
+  .install-prompt-text h3 {
+    font-size: 20px;
+  }
+  
+  .install-prompt-text p {
+    font-size: 14px;
+  }
+  
+  .install-btn {
+    padding: 10px 24px;
+    font-size: 15px;
+  }
+}
+
+/* Add some extra funk with animated emoji that appears randomly */
+.install-prompt-content .emoji-funk {
+  position: absolute;
+  font-size: 24px;
+  opacity: 0;
+  animation: emojiPop 3s ease-out infinite;
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.3));
+}
+
+.install-prompt-content .emoji-funk:nth-child(1) {
+  top: 10%;
+  left: 10%;
+  animation-delay: 0.5s;
+}
+
+.install-prompt-content .emoji-funk:nth-child(2) {
+  top: 15%;
+  right: 15%;
+  animation-delay: 1.2s;
+}
+
+.install-prompt-content .emoji-funk:nth-child(3) {
+  bottom: 20%;
+  left: 20%;
+  animation-delay: 1.8s;
+}
+
+@keyframes emojiPop {
+  0% {
+    transform: scale(0) rotate(-20deg);
+    opacity: 0;
+  }
+  10% {
+    transform: scale(1.2) rotate(10deg);
+    opacity: 1;
+  }
+  20% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+  30% {
+    transform: scale(1.1) rotate(10deg);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(1) rotate(0);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
