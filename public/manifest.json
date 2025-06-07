@@ -3,17 +3,17 @@
   "name": "BMW - the ultimate driving machine",
   "icons": [
     {
-      "src": "favicon.ico",
+      "src": "bmw.png",
       "sizes": "64x64",
-      "type": "image/x-icon"
+      "type": "image/png"
     },
     {
       "src": "porsche2.png",
-      "type": "image/png",
+      "type": "bmw1.png",
       "sizes": "192x192"
     },
     {
-      "src": "porsche1.png",
+      "src": "bmw2.png",
       "type": "image/png",
       "sizes": "512x512"
     }
