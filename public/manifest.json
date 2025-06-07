@@ -8,12 +8,12 @@
       "type": "image/png"
     },
     {
-      "src": "bmw1.png",
+      "src": "bmw2.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "bmw2.png",
+      "src": "bmw1.png",
       "type": "image/png",
       "sizes": "512x512"
     }
