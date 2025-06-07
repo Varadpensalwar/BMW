@@ -8,8 +8,8 @@
       "type": "image/png"
     },
     {
-      "src": "porsche2.png",
-      "type": "bmw1.png",
+      "src": "bmw1.png",
+      "type": "image/png",
       "sizes": "192x192"
     },
     {
