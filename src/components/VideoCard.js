@@ -8,11 +8,19 @@ const VideoCard = ({
     currentVideoIndex, 
     setCurrentVideoIndex, 
     isMobile,
-    autoplayEnabled
+    autoplayEnabled,
+    intensityVibrationEnabled = true // New prop to enable/disable intensity vibration
 }) => {
     const cardRef = useRef(null);
     const videoRef = useRef(null);
     const progressRef = useRef(null);
+    const audioContextRef = useRef(null);
+    const analyserRef = useRef(null);
+    const dataArrayRef = useRef(null);
+    const animationFrameRef = useRef(null);
+    const lastIntensityRef = useRef(0);
+    const intensityThresholdRef = useRef(0.7); // Adjust sensitivity (0.1 = very sensitive, 0.9 = less sensitive)
+    
     const [loaded, setLoaded] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     
@@ -41,6 +49,22 @@ const VideoCard = ({
                         // Maximum vibration experience
                         pattern = [200, 50, 250, 50, 300, 100, 250, 50, 200, 50, 150, 25, 100];
                         break;
+                    case 'bassHit':
+                        // Strong bass hit vibration
+                        pattern = [120, 40, 80];
+                        break;
+                    case 'drumBeat':
+                        // Sharp drum beat vibration
+                        pattern = [60, 15, 90, 15, 60];
+                        break;
+                    case 'intense':
+                        // Intense moment vibration
+                        pattern = [80, 20, 100, 20, 120, 30, 100, 20, 80];
+                        break;
+                    case 'buildUp':
+                        // Build-up vibration
+                        pattern = [40, 10, 50, 10, 60, 10, 70, 10, 80, 10, 90, 10, 100];
+                        break;
                     default:
                         // Default gentle pulse
                         pattern = [60, 30, 60];
@@ -52,6 +76,106 @@ const VideoCard = ({
             }
         }
     }, [isMobile]);
+
+    // Audio analysis for intensity detection
+    const setupAudioAnalysis = useCallback(() => {
+        const video = videoRef.current;
+        if (!video || !intensityVibrationEnabled) return;
+
+        try {
+            // Create audio context
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioContext = new AudioContext();
+            audioContextRef.current = audioContext;
+
+            // Create analyser
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.8;
+            analyserRef.current = analyser;
+
+            // Create data array
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            dataArrayRef.current = dataArray;
+
+            // Connect video to analyser
+            const source = audioContext.createMediaElementSource(video);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            // Start analysis
+            analyzeAudio();
+        } catch (error) {
+            console.log('Audio analysis setup failed:', error);
+        }
+    }, [intensityVibrationEnabled]);
+
+    // Analyze audio for intensity
+    const analyzeAudio = useCallback(() => {
+        if (!analyserRef.current || !dataArrayRef.current) return;
+
+        const analyser = analyserRef.current;
+        const dataArray = dataArrayRef.current;
+
+        const analyze = () => {
+            analyser.getByteFrequencyData(dataArray);
+
+            // Calculate different frequency ranges
+            const bassRange = dataArray.slice(0, 20); // Low frequencies (bass)
+            const midRange = dataArray.slice(20, 100); // Mid frequencies
+            const highRange = dataArray.slice(100, 200); // High frequencies
+
+            // Calculate average intensity for each range
+            const bassAvg = bassRange.reduce((sum, val) => sum + val, 0) / bassRange.length;
+            const midAvg = midRange.reduce((sum, val) => sum + val, 0) / midRange.length;
+            const highAvg = highRange.reduce((sum, val) => sum + val, 0) / highRange.length;
+
+            // Calculate overall intensity
+            const overallIntensity = (bassAvg + midAvg + highAvg) / 3 / 255;
+
+            // Detect intensity changes
+            const intensityChange = Math.abs(overallIntensity - lastIntensityRef.current);
+            
+            // Trigger vibrations based on audio characteristics
+            if (overallIntensity > intensityThresholdRef.current) {
+                // High intensity moment
+                if (intensityChange > 0.3) {
+                    triggerVibration('intense');
+                }
+            }
+
+            // Detect bass hits
+            if (bassAvg > 180 && intensityChange > 0.4) {
+                triggerVibration('bassHit');
+            }
+
+            // Detect drum beats (high frequency spikes)
+            if (highAvg > 150 && intensityChange > 0.3) {
+                triggerVibration('drumBeat');
+            }
+
+            // Detect build-ups (gradual intensity increase)
+            if (overallIntensity > lastIntensityRef.current + 0.1 && overallIntensity > 0.5) {
+                triggerVibration('buildUp');
+            }
+
+            lastIntensityRef.current = overallIntensity;
+            animationFrameRef.current = requestAnimationFrame(analyze);
+        };
+
+        analyze();
+    }, [triggerVibration]);
+
+    // Cleanup audio analysis
+    const cleanupAudioAnalysis = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close();
+        }
+    }, []);
 
     // Expose scroll vibration function to parent component
     window.triggerScrollVibration = () => triggerVibration('scroll');
@@ -101,6 +225,10 @@ const VideoCard = ({
             setIsPlaying(true);
             // Grok-style ascending pulse for play
             triggerVibration('play');
+            // Start audio analysis when playing
+            if (intensityVibrationEnabled) {
+                setupAudioAnalysis();
+            }
         };
         
         // Function to handle pause event
@@ -108,6 +236,8 @@ const VideoCard = ({
             setIsPlaying(false);
             // Grok-style descending pulse for pause
             triggerVibration('pause');
+            // Stop audio analysis when paused
+            cleanupAudioAnalysis();
         };
         
         // Set up event listeners
@@ -135,7 +265,7 @@ const VideoCard = ({
                 video.removeEventListener('pause', handlePause);
             }
         };
-    }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex, triggerVibration]);
+    }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex, triggerVibration, setupAudioAnalysis, cleanupAudioAnalysis]);
     
     // Handle when this card becomes active
     useEffect(() => {
@@ -191,7 +321,14 @@ const VideoCard = ({
                 video.pause();
             }
         }
-    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, triggerVibration]);
+    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, triggerVibration, setupAudioAnalysis]);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            cleanupAudioAnalysis();
+        };
+    }, [cleanupAudioAnalysis]);
     
     // Handle mouse enter/leave for controls - not needed anymore since we only show controls when paused
     const handleMouseEnter = () => {
