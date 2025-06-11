@@ -20,7 +20,7 @@ const VideoCard = ({
     const isActive = currentVideoIndex === index;
     
     // Vibration function for mobile devices
-    const triggerVibration = useCallback((pattern = [50]) => {
+    const triggerVibration = useCallback((pattern = [200]) => {
         if (isMobile && 'vibrate' in navigator) {
             try {
                 navigator.vibrate(pattern);
@@ -56,8 +56,7 @@ const VideoCard = ({
                 if (isMobile) {
                     card.style.opacity = '0';
                     card.style.visibility = 'hidden';
-                    // Subtle vibration when video ends
-                    triggerVibration([30]);
+                    // Removed video end vibration since you have scroll vibration
                 }
                 
                 // Only advance if autoplay is enabled
@@ -73,15 +72,15 @@ const VideoCard = ({
         // Function to handle play event
         const handlePlay = () => {
             setIsPlaying(true);
-            // Vibrate on play (short vibration)
-            triggerVibration([40]);
+            // Strong vibration on play
+            triggerVibration([150]);
         };
         
         // Function to handle pause event
         const handlePause = () => {
             setIsPlaying(false);
-            // Vibrate on pause (double tap pattern)
-            triggerVibration([30, 50, 30]);
+            // Strong double vibration on pause
+            triggerVibration([100, 100, 100]);
         };
         
         // Set up event listeners
@@ -129,8 +128,7 @@ const VideoCard = ({
                     { opacity: 1, duration: 0.5 }
                 );
                 
-                // Gentle vibration when card becomes active
-                triggerVibration([25]);
+                // Removed card active vibration since you have scroll vibration
             }
             
             // Ensure video has loaded
@@ -205,8 +203,7 @@ const VideoCard = ({
             // Switch to this card if not on mobile
             setCurrentVideoIndex(index);
         } else {
-            // On mobile, switching cards also gets a vibration
-            triggerVibration([35]);
+            // On mobile, switching cards - no vibration since you have scroll vibration
             setCurrentVideoIndex(index);
         }
     };
