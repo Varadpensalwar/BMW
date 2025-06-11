@@ -19,10 +19,25 @@ const VideoCard = ({
     // Check if this is the active card
     const isActive = currentVideoIndex === index;
     
-    // Vibration function for mobile devices
-    const triggerVibration = useCallback((pattern = [200]) => {
+    // Vibration function for mobile devices - Grok-style gentle pulses
+    const triggerVibration = useCallback((type = 'default') => {
         if (isMobile && 'vibrate' in navigator) {
             try {
+                let pattern;
+                switch (type) {
+                    case 'play':
+                        // Gentle ascending pulse for play
+                        pattern = [50, 20, 70, 20, 90];
+                        break;
+                    case 'pause':
+                        // Gentle descending pulse for pause
+                        pattern = [90, 20, 70, 20, 50];
+                        break;
+                    default:
+                        // Default gentle pulse
+                        pattern = [60, 30, 60];
+                        break;
+                }
                 navigator.vibrate(pattern);
             } catch (error) {
                 console.log('Vibration not supported or failed:', error);
@@ -72,15 +87,15 @@ const VideoCard = ({
         // Function to handle play event
         const handlePlay = () => {
             setIsPlaying(true);
-            // Strong vibration on play
-            triggerVibration([150]);
+            // Grok-style ascending pulse for play
+            triggerVibration('play');
         };
         
         // Function to handle pause event
         const handlePause = () => {
             setIsPlaying(false);
-            // Strong double vibration on pause
-            triggerVibration([100, 100, 100]);
+            // Grok-style descending pulse for pause
+            triggerVibration('pause');
         };
         
         // Set up event listeners
