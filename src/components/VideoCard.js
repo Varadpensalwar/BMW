@@ -19,6 +19,17 @@ const VideoCard = ({
     // Check if this is the active card
     const isActive = currentVideoIndex === index;
     
+    // Vibration function for mobile devices
+    const triggerVibration = (pattern = [50]) => {
+        if (isMobile && 'vibrate' in navigator) {
+            try {
+                navigator.vibrate(pattern);
+            } catch (error) {
+                console.log('Vibration not supported or failed:', error);
+            }
+        }
+    };
+    
     useEffect(() => {
         const video = videoRef.current;
         const card = cardRef.current;
@@ -45,6 +56,8 @@ const VideoCard = ({
                 if (isMobile) {
                     card.style.opacity = '0';
                     card.style.visibility = 'hidden';
+                    // Subtle vibration when video ends
+                    triggerVibration([30]);
                 }
                 
                 // Only advance if autoplay is enabled
@@ -57,18 +70,26 @@ const VideoCard = ({
             }
         };
         
+        // Function to handle play event
+        const handlePlay = () => {
+            setIsPlaying(true);
+            // Vibrate on play (short vibration)
+            triggerVibration([40]);
+        };
+        
+        // Function to handle pause event
+        const handlePause = () => {
+            setIsPlaying(false);
+            // Vibrate on pause (double tap pattern)
+            triggerVibration([30, 50, 30]);
+        };
+        
         // Set up event listeners
         if (video) {
             video.addEventListener('timeupdate', updateProgress);
             video.addEventListener('ended', handleVideoEnd);
-            video.addEventListener('play', () => {
-                setIsPlaying(true);
-                // Controls are automatically hidden by the conditional rendering
-            });
-            video.addEventListener('pause', () => {
-                setIsPlaying(false);
-                // Controls are automatically shown by the conditional rendering
-            });
+            video.addEventListener('play', handlePlay);
+            video.addEventListener('pause', handlePause);
             
             // Preload the video if it's the current one or the next one
             if (index === currentVideoIndex || index === (currentVideoIndex + 1) % videoData.length) {
@@ -84,8 +105,8 @@ const VideoCard = ({
             if (video) {
                 video.removeEventListener('timeupdate', updateProgress);
                 video.removeEventListener('ended', handleVideoEnd);
-                video.removeEventListener('play', () => setIsPlaying(true));
-                video.removeEventListener('pause', () => setIsPlaying(false));
+                video.removeEventListener('play', handlePlay);
+                video.removeEventListener('pause', handlePause);
             }
         };
     }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex]);
@@ -107,6 +128,9 @@ const VideoCard = ({
                     { opacity: 0 },
                     { opacity: 1, duration: 0.5 }
                 );
+                
+                // Gentle vibration when card becomes active
+                triggerVibration([25]);
             }
             
             // Ensure video has loaded
@@ -126,9 +150,7 @@ const VideoCard = ({
                         console.error('Video playback error:', error);
                     });
                 }
-                // Controls visibility is handled by conditional rendering based on isPlaying
             }
-            // Controls visibility is handled by conditional rendering based on isPlaying
         } else if (!isActive && card) {
             // Remove active state
             card.classList.remove('active');
@@ -168,19 +190,23 @@ const VideoCard = ({
                 const playPromise = video.play();
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
-                        // Controls visibility is handled by setting isPlaying
                         setIsPlaying(true);
+                        // Vibration is handled by the play event listener
                     }).catch(error => {
                         console.error('Video playback error:', error);
                     });
                 }
             } else {
                 video.pause();
-                // Don't need to set controls visibility as it's handled by isPlaying state
                 setIsPlaying(false);
+                // Vibration is handled by the pause event listener
             }
         } else if (!isMobile) {
             // Switch to this card if not on mobile
+            setCurrentVideoIndex(index);
+        } else {
+            // On mobile, switching cards also gets a vibration
+            triggerVibration([35]);
             setCurrentVideoIndex(index);
         }
     };
