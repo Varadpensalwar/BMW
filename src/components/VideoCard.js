@@ -77,40 +77,6 @@ const VideoCard = ({
         }
     }, [isMobile]);
 
-    // Audio analysis for intensity detection
-    const setupAudioAnalysis = useCallback(() => {
-        const video = videoRef.current;
-        if (!video || !intensityVibrationEnabled) return;
-
-        try {
-            // Create audio context
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            const audioContext = new AudioContext();
-            audioContextRef.current = audioContext;
-
-            // Create analyser
-            const analyser = audioContext.createAnalyser();
-            analyser.fftSize = 512;
-            analyser.smoothingTimeConstant = 0.8;
-            analyserRef.current = analyser;
-
-            // Create data array
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-            dataArrayRef.current = dataArray;
-
-            // Connect video to analyser
-            const source = audioContext.createMediaElementSource(video);
-            source.connect(analyser);
-            analyser.connect(audioContext.destination);
-
-            // Start analysis
-            analyzeAudio();
-        } catch (error) {
-            console.log('Audio analysis setup failed:', error);
-        }
-    }, [intensityVibrationEnabled]);
-
     // Analyze audio for intensity
     const analyzeAudio = useCallback(() => {
         if (!analyserRef.current || !dataArrayRef.current) return;
@@ -166,6 +132,40 @@ const VideoCard = ({
 
         analyze();
     }, [triggerVibration]);
+
+    // Audio analysis for intensity detection
+    const setupAudioAnalysis = useCallback(() => {
+        const video = videoRef.current;
+        if (!video || !intensityVibrationEnabled) return;
+
+        try {
+            // Create audio context
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioContext = new AudioContext();
+            audioContextRef.current = audioContext;
+
+            // Create analyser
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.8;
+            analyserRef.current = analyser;
+
+            // Create data array
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+            dataArrayRef.current = dataArray;
+
+            // Connect video to analyser
+            const source = audioContext.createMediaElementSource(video);
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            // Start analysis
+            analyzeAudio();
+        } catch (error) {
+            console.log('Audio analysis setup failed:', error);
+        }
+    }, [intensityVibrationEnabled, analyzeAudio]);
 
     // Cleanup audio analysis
     const cleanupAudioAnalysis = useCallback(() => {
@@ -265,7 +265,7 @@ const VideoCard = ({
                 video.removeEventListener('pause', handlePause);
             }
         };
-    }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex, triggerVibration, setupAudioAnalysis, cleanupAudioAnalysis]);
+    }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex, triggerVibration, setupAudioAnalysis, cleanupAudioAnalysis, intensityVibrationEnabled]);
     
     // Handle when this card becomes active
     useEffect(() => {
