@@ -19,7 +19,7 @@ const VideoCard = ({
     // Check if this is the active card
     const isActive = currentVideoIndex === index;
     
-    // Vibration function for mobile devices - Grok-style gentle pulses
+    // Vibration function for mobile devices - Enhanced patterns
     const triggerVibration = useCallback((type = 'default') => {
         if (isMobile && 'vibrate' in navigator) {
             try {
@@ -33,6 +33,14 @@ const VideoCard = ({
                         // Gentle descending pulse for pause
                         pattern = [90, 20, 70, 20, 50];
                         break;
+                    case 'scroll':
+                        // Long, rich scrolling vibration - full haptic experience
+                        pattern = [40, 10, 60, 10, 80, 10, 100, 15, 120, 15, 100, 10, 80, 10, 60, 10, 40];
+                        break;
+                    case 'fullVibration':
+                        // Maximum vibration experience
+                        pattern = [200, 50, 250, 50, 300, 100, 250, 50, 200, 50, 150, 25, 100];
+                        break;
                     default:
                         // Default gentle pulse
                         pattern = [60, 30, 60];
@@ -44,6 +52,10 @@ const VideoCard = ({
             }
         }
     }, [isMobile]);
+
+    // Expose scroll vibration function to parent component
+    window.triggerScrollVibration = () => triggerVibration('scroll');
+    window.triggerFullVibration = () => triggerVibration('fullVibration');
     
     useEffect(() => {
         const video = videoRef.current;
