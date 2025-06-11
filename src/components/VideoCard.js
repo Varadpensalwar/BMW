@@ -1,5 +1,5 @@
 // src/components/VideoCard.js
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 
 const VideoCard = ({ 
@@ -20,7 +20,7 @@ const VideoCard = ({
     const isActive = currentVideoIndex === index;
     
     // Vibration function for mobile devices
-    const triggerVibration = (pattern = [50]) => {
+    const triggerVibration = useCallback((pattern = [50]) => {
         if (isMobile && 'vibrate' in navigator) {
             try {
                 navigator.vibrate(pattern);
@@ -28,7 +28,7 @@ const VideoCard = ({
                 console.log('Vibration not supported or failed:', error);
             }
         }
-    };
+    }, [isMobile]);
     
     useEffect(() => {
         const video = videoRef.current;
@@ -109,7 +109,7 @@ const VideoCard = ({
                 video.removeEventListener('pause', handlePause);
             }
         };
-    }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex]);
+    }, [index, currentVideoIndex, videoData, isMobile, loaded, autoplayEnabled, setCurrentVideoIndex, triggerVibration]);
     
     // Handle when this card becomes active
     useEffect(() => {
@@ -166,7 +166,7 @@ const VideoCard = ({
                 video.pause();
             }
         }
-    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled]);
+    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, triggerVibration]);
     
     // Handle mouse enter/leave for controls - not needed anymore since we only show controls when paused
     const handleMouseEnter = () => {
