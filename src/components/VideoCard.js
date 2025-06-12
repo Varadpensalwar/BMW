@@ -140,6 +140,11 @@ const VideoCard = ({
         if (!video || !intensityVibrationEnabled) return;
 
         try {
+            // Clean up existing audio context first
+            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+                audioContextRef.current.close();
+            }
+
             // Create audio context
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             const audioContext = new AudioContext();
@@ -156,10 +161,16 @@ const VideoCard = ({
             const dataArray = new Uint8Array(bufferLength);
             dataArrayRef.current = dataArray;
 
-            // Connect video to analyser
-            const source = audioContext.createMediaElementSource(video);
-            source.connect(analyser);
-            analyser.connect(audioContext.destination);
+            // Check if video already has a source node connected
+            if (!video.audioSourceConnected) {
+                // Connect video to analyser
+                const source = audioContext.createMediaElementSource(video);
+                source.connect(analyser);
+                analyser.connect(audioContext.destination);
+                
+                // Mark video as having audio source connected
+                video.audioSourceConnected = true;
+            }
 
             // Start analysis
             analyzeAudio();
@@ -221,8 +232,9 @@ const VideoCard = ({
             setHasStartedPlaying(true);
             // Grok-style ascending pulse for play
             triggerVibration('play');
-            // Start audio analysis when playing
-            if (intensityVibrationEnabled) {
+            // Start audio analysis when playing (only if not already connected)
+            if (intensityVibrationEnabled && !video.audioAnalysisActive) {
+                video.audioAnalysisActive = true;
                 setupAudioAnalysis();
             }
         };
@@ -233,6 +245,9 @@ const VideoCard = ({
             // Grok-style descending pulse for pause
             triggerVibration('pause');
             // Stop audio analysis when paused
+            if (video) {
+                video.audioAnalysisActive = false;
+            }
             cleanupAudioAnalysis();
         };
         
@@ -314,6 +329,9 @@ const VideoCard = ({
             if (video && !video.paused) {
                 video.pause();
                 setIsPlaying(false);
+                // Clean up audio analysis when switching away
+                video.audioAnalysisActive = false;
+                cleanupAudioAnalysis();
             }
         }
     }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, hasStartedPlaying]);
