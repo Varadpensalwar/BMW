@@ -2,6 +2,19 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 
+// Move vibration patterns outside component to avoid dependency issues
+const vibrationPatterns = {
+    play: [50, 20, 70, 20, 90],
+    pause: [90, 20, 70, 20, 50],
+    scroll: [40, 10, 60, 10, 80, 10, 100, 15, 120, 15, 100, 10, 80, 10, 60, 10, 40],
+    fullVibration: [200, 50, 250, 50, 300, 100, 250, 50, 200, 50, 150, 25, 100],
+    bassHit: [120, 40, 80],
+    drumBeat: [60, 15, 90, 15, 60],
+    intense: [80, 20, 100, 20, 120, 30, 100, 20, 80],
+    buildUp: [40, 10, 50, 10, 60, 10, 70, 10, 80, 10, 90, 10, 100],
+    default: [60, 30, 60]
+};
+
 const VideoCard = ({ 
     videoData, 
     index, 
@@ -28,19 +41,6 @@ const VideoCard = ({
     
     // Check if this is the active card
     const isActive = currentVideoIndex === index;
-    
-    // Vibration patterns
-    const vibrationPatterns = {
-        play: [50, 20, 70, 20, 90],
-        pause: [90, 20, 70, 20, 50],
-        scroll: [40, 10, 60, 10, 80, 10, 100, 15, 120, 15, 100, 10, 80, 10, 60, 10, 40],
-        fullVibration: [200, 50, 250, 50, 300, 100, 250, 50, 200, 50, 150, 25, 100],
-        bassHit: [120, 40, 80],
-        drumBeat: [60, 15, 90, 15, 60],
-        intense: [80, 20, 100, 20, 120, 30, 100, 20, 80],
-        buildUp: [40, 10, 50, 10, 60, 10, 70, 10, 80, 10, 90, 10, 100],
-        default: [60, 30, 60]
-    };
     
     // Vibration function
     const triggerVibration = useCallback((type = 'default') => {
