@@ -23,6 +23,7 @@ const VideoCard = ({
     
     const [loaded, setLoaded] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [hasStartedPlaying, setHasStartedPlaying] = useState(false); // Track if video has ever played
     
     // Check if this is the active card
     const isActive = currentVideoIndex === index;
@@ -172,7 +173,7 @@ const VideoCard = ({
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
         }
-        if (audioContextRef.current) {
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close();
         }
     }, []);
@@ -197,17 +198,11 @@ const VideoCard = ({
         // Function to handle video end
         const handleVideoEnd = () => {
             if (card) {
-                card.classList.remove('active');
                 setIsPlaying(false);
+                setHasStartedPlaying(false); // Reset the playing state when video ends
                 
                 if (progressBar) {
                     progressBar.style.width = '0%';
-                }
-                
-                if (isMobile) {
-                    card.style.opacity = '0';
-                    card.style.visibility = 'hidden';
-                    // Removed video end vibration since you have scroll vibration
                 }
                 
                 // Only advance if autoplay is enabled
@@ -223,6 +218,7 @@ const VideoCard = ({
         // Function to handle play event
         const handlePlay = () => {
             setIsPlaying(true);
+            setHasStartedPlaying(true);
             // Grok-style ascending pulse for play
             triggerVibration('play');
             // Start audio analysis when playing
@@ -284,8 +280,6 @@ const VideoCard = ({
                     { opacity: 0 },
                     { opacity: 1, duration: 0.5 }
                 );
-                
-                // Removed card active vibration since you have scroll vibration
             }
             
             // Ensure video has loaded
@@ -295,8 +289,9 @@ const VideoCard = ({
                 setLoaded(true);
             }
             
-            // Play the video if autoplay is enabled
-            if (autoplayEnabled) {
+            // Play the video if autoplay is enabled AND this video hasn't been played before
+            // OR if the video ended and we're coming back to it
+            if (autoplayEnabled && (!hasStartedPlaying || video.ended)) {
                 video.currentTime = 0;
                 const playPromise = video.play();
                 
@@ -309,7 +304,6 @@ const VideoCard = ({
         } else if (!isActive && card) {
             // Remove active state
             card.classList.remove('active');
-            setIsPlaying(false);
             
             if (isMobile) {
                 card.style.opacity = '0';
@@ -319,9 +313,10 @@ const VideoCard = ({
             // Pause the video if it's playing
             if (video && !video.paused) {
                 video.pause();
+                setIsPlaying(false);
             }
         }
-    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, triggerVibration, setupAudioAnalysis]);
+    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, hasStartedPlaying]);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -329,15 +324,6 @@ const VideoCard = ({
             cleanupAudioAnalysis();
         };
     }, [cleanupAudioAnalysis]);
-    
-    // Handle mouse enter/leave for controls - not needed anymore since we only show controls when paused
-    const handleMouseEnter = () => {
-        // Controls visibility now depends only on play state
-    };
-    
-    const handleMouseLeave = () => {
-        // Controls visibility now depends only on play state
-    };
     
     // Handle click on video card
     const handleCardClick = (e) => {
@@ -348,11 +334,18 @@ const VideoCard = ({
         
         if (isActive && video) {
             // Toggle play/pause for the active video
-            if (video.paused) {
+            if (video.paused || video.ended) {
+                // If video ended, reset to beginning
+                if (video.ended) {
+                    video.currentTime = 0;
+                    setHasStartedPlaying(false);
+                }
+                
                 const playPromise = video.play();
                 if (playPromise !== undefined) {
                     playPromise.then(() => {
                         setIsPlaying(true);
+                        setHasStartedPlaying(true);
                         // Vibration is handled by the play event listener
                     }).catch(error => {
                         console.error('Video playback error:', error);
@@ -363,11 +356,8 @@ const VideoCard = ({
                 setIsPlaying(false);
                 // Vibration is handled by the pause event listener
             }
-        } else if (!isMobile) {
-            // Switch to this card if not on mobile
-            setCurrentVideoIndex(index);
         } else {
-            // On mobile, switching cards - no vibration since you have scroll vibration
+            // Switch to this card
             setCurrentVideoIndex(index);
         }
     };
@@ -377,8 +367,6 @@ const VideoCard = ({
             className={`video-card ${isActive ? 'active' : ''}`}
             ref={cardRef}
             onClick={handleCardClick}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
             style={{
                 opacity: isMobile ? (isActive ? 1 : 0) : 1,
                 visibility: isMobile ? (isActive ? 'visible' : 'hidden') : 'visible'
@@ -395,8 +383,8 @@ const VideoCard = ({
                 <div className="progress-bar" ref={progressRef}></div>
                 <div className="model-info">{videoData[index].model}</div>
                 
-                {/* Play/Pause Button Overlay - Only show when active AND not playing */}
-                {isActive && !isPlaying && (
+                {/* Play/Pause Button Overlay - Show when active AND (not playing OR video ended) */}
+                {isActive && (!isPlaying || videoRef.current?.ended) && (
                     <div className="play-pause-overlay show-controls">
                         <div className="play-pause-button">
                             <svg viewBox="0 0 24 24" width="100%" height="100%">
