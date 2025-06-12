@@ -183,9 +183,11 @@ const VideoCard = ({
     const cleanupAudioAnalysis = useCallback(() => {
         if (animationFrameRef.current) {
             cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
         }
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
             audioContextRef.current.close();
+            audioContextRef.current = null;
         }
     }, []);
 
@@ -334,7 +336,7 @@ const VideoCard = ({
                 cleanupAudioAnalysis();
             }
         }
-    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, hasStartedPlaying]);
+    }, [isActive, index, videoData, isMobile, loaded, autoplayEnabled, hasStartedPlaying, cleanupAudioAnalysis]);
 
     // Cleanup on unmount
     useEffect(() => {
