@@ -1,7 +1,5 @@
 // src/App.js
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-// Remove or comment out the unused gsap import
-// import { gsap } from 'gsap';
 import './App.css';
 import videoData from './videoData';
 import BackgroundAnimation from './components/BackgroundAnimation';
@@ -17,59 +15,91 @@ function App() {
     const [isVibrating, setIsVibrating] = useState(false);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
     const [installPromptDismissed, setInstallPromptDismissed] = useState(false);
+    const [globalPlayingState, setGlobalPlayingState] = useState({}); // Track playing state for each video
+    
     const audioContextRef = useRef(null);
     const analyserRef = useRef(null);
     const sourceNodeRef = useRef(null);
     const animationFrameRef = useRef(null);
     const currentVideoRef = useRef(null);
     const deferredPromptRef = useRef(null);
+    const hasUserInteracted = useRef(false);
 
     // Track Konami Code for Easter Egg
-    // Using useMemo to prevent recreation on each render
     const konamiCodeSequence = useMemo(() =>
         ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'],
         []
     );
     const [konamiCodePosition, setKonamiCodePosition] = useState(0);
 
-    // Initialize audio analyzer - with the startAudioMonitoring function moved inside
+    // Clean up audio context properly
+    const cleanupAudioContext = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+            animationFrameRef.current = null;
+        }
+        
+        if (sourceNodeRef.current) {
+            try {
+                sourceNodeRef.current.disconnect();
+            } catch (e) {
+                console.log('Source node already disconnected');
+            }
+            sourceNodeRef.current = null;
+        }
+        
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            try {
+                audioContextRef.current.close();
+            } catch (e) {
+                console.log('Audio context already closed');
+            }
+            audioContextRef.current = null;
+        }
+        
+        analyserRef.current = null;
+        currentVideoRef.current = null;
+    }, []);
+
+    // Initialize audio analyzer with proper cleanup
     const setupAudioAnalyzer = useCallback(() => {
-        if (!isMobile || !('vibrate' in navigator)) return;
+        if (!isMobile || !('vibrate' in navigator) || !hasUserInteracted.current) return;
+
+        // Clean up any existing audio context first
+        cleanupAudioContext();
 
         try {
-            // Create audio context if it doesn't exist
-            if (!audioContextRef.current) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioContextRef.current = new AudioContext();
+            // Find the current active video element
+            const activeVideoCard = document.querySelector('.video-card.active');
+            const videoElement = activeVideoCard?.querySelector('video');
+            
+            if (!videoElement || videoElement.readyState < 2) {
+                console.log('Video element not ready for audio analysis');
+                return;
             }
 
-            // Create analyzer node if it doesn't exist
-            if (!analyserRef.current) {
-                analyserRef.current = audioContextRef.current.createAnalyser();
-                analyserRef.current.fftSize = 32; // Small size for efficiency
-                analyserRef.current.smoothingTimeConstant = 0.5; // Smooth transitions
+            // Create audio context
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioContextRef.current = new AudioContext();
+
+            // Resume if suspended
+            if (audioContextRef.current.state === 'suspended') {
+                audioContextRef.current.resume();
             }
 
-            // Find the current video element
-            const videoElement = document.querySelector('.video-current video');
-            if (!videoElement) return;
+            // Create analyzer
+            analyserRef.current = audioContextRef.current.createAnalyser();
+            analyserRef.current.fftSize = 32;
+            analyserRef.current.smoothingTimeConstant = 0.5;
 
-            // Save reference to current video
-            currentVideoRef.current = videoElement;
-
-            // Clean up previous source if it exists
-            if (sourceNodeRef.current) {
-                sourceNodeRef.current.disconnect();
-            }
-
-            // Create a new source node from the video element
+            // Create source from video element
             sourceNodeRef.current = audioContextRef.current.createMediaElementSource(videoElement);
-
-            // Connect the source to the analyzer and then to the destination
             sourceNodeRef.current.connect(analyserRef.current);
             analyserRef.current.connect(audioContextRef.current.destination);
 
-            // Define startAudioMonitoring here (locally within setupAudioAnalyzer)
+            currentVideoRef.current = videoElement;
+
+            // Start audio monitoring
             const startAudioMonitoring = () => {
                 if (!analyserRef.current || !isMobile || !('vibrate' in navigator)) return;
 
@@ -77,22 +107,22 @@ function App() {
                 const dataArray = new Uint8Array(bufferLength);
 
                 const analyzeAudio = () => {
-                    // Cancel any previous animation frame
-                    if (animationFrameRef.current) {
-                        cancelAnimationFrame(animationFrameRef.current);
+                    if (!analyserRef.current || !currentVideoRef.current) return;
+                    
+                    // Check if the video is still playing and is the current video
+                    const activeVideo = document.querySelector('.video-card.active video');
+                    if (!activeVideo || activeVideo !== currentVideoRef.current || activeVideo.paused) {
+                        return; // Stop analysis if video changed or paused
                     }
 
-                    // Get frequency data
                     analyserRef.current.getByteFrequencyData(dataArray);
 
-                    // Calculate average volume level (0-255)
                     let sum = 0;
                     for (let i = 0; i < bufferLength; i++) {
                         sum += dataArray[i];
                     }
                     const averageVolume = sum / bufferLength;
 
-                    // Set vibration intensity based on volume
                     let newIntensity;
                     if (averageVolume < 50) {
                         newIntensity = 'low';
@@ -102,18 +132,13 @@ function App() {
                         newIntensity = 'high';
                     }
 
-                    // Only update and vibrate if intensity changed or not currently vibrating
                     if (newIntensity !== vibrationIntensity || !isVibrating) {
                         setVibrationIntensity(newIntensity);
 
-                        // Create vibration pattern based on audio intensity
-                        if (averageVolume > 20) { // Threshold to avoid constant vibration on silence
+                        if (averageVolume > 20) {
                             setIsVibrating(true);
+                            const duration = Math.min(Math.floor(averageVolume), 200);
 
-                            // Create a pattern that mimics the audio intensity
-                            const duration = Math.min(Math.floor(averageVolume), 200); // Cap at 200ms
-
-                            // For beat-like feeling, create short bursts for high intensity
                             let pattern;
                             if (newIntensity === 'high') {
                                 pattern = [duration, duration / 2];
@@ -123,14 +148,12 @@ function App() {
                                 pattern = [duration / 2];
                             }
 
-                            // Add subtle variations to prevent monotony
                             if (Math.random() < 0.2) {
                                 pattern = pattern.map(p => p + Math.floor(Math.random() * 20 - 10));
                             }
 
                             navigator.vibrate(pattern);
 
-                            // Reset vibration state after the pattern completes
                             const totalDuration = pattern.reduce((sum, val) => sum + val, 0);
                             setTimeout(() => {
                                 setIsVibrating(false);
@@ -138,20 +161,26 @@ function App() {
                         }
                     }
 
-                    // Continue monitoring
                     animationFrameRef.current = requestAnimationFrame(analyzeAudio);
                 };
 
-                // Start the analysis loop
                 analyzeAudio();
             };
 
-            // Start monitoring audio levels
             startAudioMonitoring();
         } catch (error) {
             console.error("Error setting up audio analyzer:", error);
+            cleanupAudioContext();
         }
-    }, [isMobile, vibrationIntensity, isVibrating]);
+    }, [isMobile, vibrationIntensity, isVibrating, cleanupAudioContext]);
+
+    // Handle video state changes
+    const handleVideoStateChange = useCallback((videoIndex, isPlaying) => {
+        setGlobalPlayingState(prev => ({
+            ...prev,
+            [videoIndex]: isPlaying
+        }));
+    }, []);
 
     // Check if mobile and setup install prompt
     useEffect(() => {
@@ -160,26 +189,18 @@ function App() {
             setIsMobile(isMobileDevice);
         };
 
-        // Initial check
         checkMobile();
-
-        // Add listener for window resize
         window.addEventListener('resize', checkMobile);
 
-        // Check if user has already dismissed the prompt
         const promptDismissed = localStorage.getItem('installPromptDismissed');
         if (promptDismissed) {
             setInstallPromptDismissed(true);
         }
 
-        // Listen for beforeinstallprompt event
         window.addEventListener('beforeinstallprompt', (e) => {
-            // Prevent Chrome 67 and earlier from automatically showing the prompt
             e.preventDefault();
-            // Stash the event so it can be triggered later
             deferredPromptRef.current = e;
 
-            // Show our custom install prompt after a delay if not dismissed before
             if (!promptDismissed) {
                 setTimeout(() => {
                     setShowInstallPrompt(true);
@@ -192,39 +213,35 @@ function App() {
         };
     }, []);
 
-    // Setup audio analyzer when videos change
+    // Setup audio analyzer when videos change or when user interacts
     useEffect(() => {
-        if (isMobile) {
-            // Add a slight delay to ensure the video element is ready
+        if (isMobile && hasUserInteracted.current) {
             const timeoutId = setTimeout(() => {
                 setupAudioAnalyzer();
-            }, 500);
+            }, 1000); // Increased delay to ensure video is ready
 
             return () => clearTimeout(timeoutId);
         }
     }, [currentVideoIndex, isMobile, setupAudioAnalyzer]);
 
-    // Clean up audio context on component unmount
+    // Clean up on unmount
     useEffect(() => {
         return () => {
-            if (audioContextRef.current) {
-                if (sourceNodeRef.current) {
-                    sourceNodeRef.current.disconnect();
-                }
-                if (animationFrameRef.current) {
-                    cancelAnimationFrame(animationFrameRef.current);
-                }
-                audioContextRef.current.close().catch(err => console.error(err));
-            }
+            cleanupAudioContext();
         };
-    }, []);
+    }, [cleanupAudioContext]);
 
     // Handle Previous Video
     const handlePrevVideo = useCallback(() => {
+        // Pause current video before switching
+        const currentVideo = document.querySelector('.video-card.active video');
+        if (currentVideo && !currentVideo.paused) {
+            currentVideo.pause();
+        }
+        
         const prevIndex = (currentVideoIndex - 1 + videoData.length) % videoData.length;
         setCurrentVideoIndex(prevIndex);
 
-        // Add a special vibration feedback on video change
         if (isMobile && 'vibrate' in navigator) {
             navigator.vibrate([80, 40, 120]);
         }
@@ -232,10 +249,15 @@ function App() {
 
     // Handle Next Video
     const handleNextVideo = useCallback(() => {
+        // Pause current video before switching
+        const currentVideo = document.querySelector('.video-card.active video');
+        if (currentVideo && !currentVideo.paused) {
+            currentVideo.pause();
+        }
+        
         const nextIndex = (currentVideoIndex + 1) % videoData.length;
         setCurrentVideoIndex(nextIndex);
 
-        // Add a special vibration feedback on video change
         if (isMobile && 'vibrate' in navigator) {
             navigator.vibrate([120, 40, 80]);
         }
@@ -243,10 +265,8 @@ function App() {
 
     // Handle Install Prompt
     const handleInstallClick = () => {
-        // Hide our custom install prompt
         setShowInstallPrompt(false);
 
-        // Show the browser's install prompt
         if (deferredPromptRef.current) {
             deferredPromptRef.current.prompt();
             deferredPromptRef.current.userChoice.then((choiceResult) => {
@@ -266,7 +286,6 @@ function App() {
         setInstallPromptDismissed(true);
         localStorage.setItem('installPromptDismissed', 'true');
 
-        // Remember user's choice for 7 days
         const expiryDate = new Date();
         expiryDate.setDate(expiryDate.getDate() + 7);
         localStorage.setItem('installPromptExpiry', expiryDate.toISOString());
@@ -280,7 +299,6 @@ function App() {
             const currentDate = new Date();
 
             if (currentDate > expiryDate) {
-                // Reset dismissed state if expired
                 localStorage.removeItem('installPromptDismissed');
                 localStorage.removeItem('installPromptExpiry');
                 setInstallPromptDismissed(false);
@@ -305,15 +323,12 @@ function App() {
         const handleSwipe = () => {
             const swipeThreshold = 50;
             if (touchStartY - touchEndY > swipeThreshold) {
-                // Swipe up - next video
                 handleNextVideo();
             } else if (touchEndY - touchStartY > swipeThreshold) {
-                // Swipe down - previous video
                 handlePrevVideo();
             }
         };
 
-        // Add event listeners for mobile
         if (isMobile) {
             document.addEventListener('touchstart', handleTouchStart, false);
             document.addEventListener('touchend', handleTouchEnd, false);
@@ -325,7 +340,7 @@ function App() {
         };
     }, [isMobile, handleNextVideo, handlePrevVideo]);
 
-    // Disable pull-to-refresh on mobile within the app container
+    // Disable pull-to-refresh on mobile
     useEffect(() => {
         if (!isMobile) return;
 
@@ -339,13 +354,11 @@ function App() {
         };
 
         const handleTouchMove = (e) => {
-            // Only prevent default if pulling down when already at the top of the app container
             if (appElement.scrollTop === 0 && e.touches[0].screenY > touchStartY) {
                 e.preventDefault();
             }
         };
 
-        // Add event listeners specifically to the app container
         appElement.addEventListener('touchstart', handleTouchStart, { passive: false });
         appElement.addEventListener('touchmove', handleTouchMove, { passive: false });
 
@@ -362,19 +375,15 @@ function App() {
         const newState = !easterEggActive;
         setEasterEggActive(newState);
 
-        // Add a special vibration effect when easter egg is activated
         if (isMobile && 'vibrate' in navigator) {
             if (newState) {
-                // Create an escalating vibration to signal easter egg activation
                 navigator.vibrate([50, 30, 70, 30, 100, 30, 150, 30, 200]);
             } else {
-                // Return to normal with a gentle fade-out vibration
                 navigator.vibrate([200, 50, 150, 50, 100, 50, 70, 50, 50]);
             }
         }
 
         if (newState) {
-            // Show message
             const easterEggMessage = document.createElement('div');
             easterEggMessage.style.position = 'fixed';
             easterEggMessage.style.top = '10%';
@@ -394,7 +403,9 @@ function App() {
             document.body.appendChild(easterEggMessage);
 
             setTimeout(() => {
-                document.body.removeChild(easterEggMessage);
+                if (document.body.contains(easterEggMessage)) {
+                    document.body.removeChild(easterEggMessage);
+                }
             }, 3000);
         }
     }, [easterEggActive, isMobile]);
@@ -402,18 +413,16 @@ function App() {
     // Konami Code Handler
     useEffect(() => {
         const handleKeyDown = (e) => {
-            // Check if key matches expected key in sequence
             if (e.code === konamiCodeSequence[konamiCodePosition]) {
                 const newPosition = konamiCodePosition + 1;
                 setKonamiCodePosition(newPosition);
 
-                // If entire sequence is entered correctly
                 if (newPosition === konamiCodeSequence.length) {
                     activateEasterEgg();
-                    setKonamiCodePosition(0); // Reset
+                    setKonamiCodePosition(0);
                 }
             } else {
-                setKonamiCodePosition(0); // Reset if wrong key
+                setKonamiCodePosition(0);
             }
         };
 
@@ -424,37 +433,27 @@ function App() {
         };
     }, [konamiCodePosition, konamiCodeSequence, activateEasterEgg]);
 
-    // Handle first user interaction to enable audio context
+    // Handle first user interaction
     useEffect(() => {
         const handleUserInteraction = () => {
+            if (hasUserInteracted.current) return;
+            
+            hasUserInteracted.current = true;
             setAutoplayEnabled(true);
 
-            // Initialize audio context on first interaction (required by browsers)
-            if (isMobile && !audioContextRef.current) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioContextRef.current = new AudioContext();
-
-                // Resume audio context if it's suspended
-                if (audioContextRef.current.state === 'suspended') {
-                    audioContextRef.current.resume().then(() => {
-                        console.log('AudioContext resumed');
-                        setupAudioAnalyzer();
-                    }).catch(err => console.error('Failed to resume AudioContext', err));
-                } else {
-                    setupAudioAnalyzer();
-                }
-            }
-
-            // Vibrate once when user first interacts
             if (isMobile && 'vibrate' in navigator) {
                 navigator.vibrate([100, 50, 150]);
             }
+
+            // Setup audio context after user interaction
+            setTimeout(() => {
+                setupAudioAnalyzer();
+            }, 500);
 
             document.removeEventListener('click', handleUserInteraction);
             document.removeEventListener('touchstart', handleUserInteraction);
         };
 
-        // Add listeners for first interaction
         document.addEventListener('click', handleUserInteraction);
         document.addEventListener('touchstart', handleUserInteraction);
 
@@ -471,13 +470,16 @@ function App() {
             <div className="video-wall">
                 {videoData.map((data, index) => (
                     <VideoCard
-                        key={index}
+                        key={`video-${index}`} // More specific key
                         videoData={videoData}
                         index={index}
                         currentVideoIndex={currentVideoIndex}
                         setCurrentVideoIndex={setCurrentVideoIndex}
                         isMobile={isMobile}
                         autoplayEnabled={autoplayEnabled}
+                        globalPlayingState={globalPlayingState}
+                        onVideoStateChange={handleVideoStateChange}
+                        hasUserInteracted={hasUserInteracted.current}
                     />
                 ))}
             </div>
@@ -485,7 +487,6 @@ function App() {
             {isMobile && showInstallPrompt && !installPromptDismissed && (
                 <div className="install-prompt">
                     <div className="install-prompt-content">
-                        {/* Funky animated emojis */}
                         <span className="emoji-funk">🚀</span>
                         <span className="emoji-funk">✨</span>
                         <span className="emoji-funk">🔥</span>

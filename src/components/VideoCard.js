@@ -63,10 +63,14 @@ const VideoCard = ({
     const lastIntensityRef = useRef(0);
     const intensityThresholdRef = useRef(0.7);
     const audioSourceRef = useRef(null);
+    const loadTimeoutRef = useRef(null);
+    const playAttemptRef = useRef(null);
     
     const [loaded, setLoaded] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [canPlay, setCanPlay] = useState(false);
+    const [hasError, setHasError] = useState(false);
+    const [loadAttempted, setLoadAttempted] = useState(false);
     
     // Check if this is the active card
     const isActive = currentVideoIndex === index;
@@ -120,13 +124,13 @@ const VideoCard = ({
 
     // Enhanced audio analysis with more vibration triggers
     const analyzeAudio = useCallback(() => {
-        if (!analyserRef.current || !dataArrayRef.current || !isPlaying) return;
+        if (!analyserRef.current || !dataArrayRef.current || !isPlaying || !isActive) return;
 
         const analyser = analyserRef.current;
         const dataArray = dataArrayRef.current;
 
         const analyze = () => {
-            if (!isPlaying) return; // Stop if not playing
+            if (!isPlaying || !isActive) return; // Stop if not playing or not active
             
             analyser.getByteFrequencyData(dataArray);
 
@@ -182,12 +186,12 @@ const VideoCard = ({
         };
 
         analyze();
-    }, [isPlaying, triggerVibration]);
+    }, [isPlaying, isActive, triggerVibration]);
 
     // Setup audio analysis
     const setupAudioAnalysis = useCallback(() => {
         const video = videoRef.current;
-        if (!video || !intensityVibrationEnabled || audioContextRef.current) return;
+        if (!video || !intensityVibrationEnabled || audioContextRef.current || !isActive) return;
 
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -216,7 +220,7 @@ const VideoCard = ({
         } catch (error) {
             console.log('Audio analysis setup failed:', error);
         }
-    }, [intensityVibrationEnabled, analyzeAudio]);
+    }, [intensityVibrationEnabled, analyzeAudio, isActive]);
 
     // Cleanup audio analysis
     const cleanupAudioAnalysis = useCallback(() => {
@@ -225,27 +229,83 @@ const VideoCard = ({
             animationFrameRef.current = null;
         }
         if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-            audioContextRef.current.close();
+            try {
+                audioContextRef.current.close();
+            } catch (error) {
+                console.log('Audio context close error:', error);
+            }
             audioContextRef.current = null;
         }
         audioSourceRef.current = null;
+        analyserRef.current = null;
+        dataArrayRef.current = null;
     }, []);
+
+    // Clear any pending timeouts
+    const clearTimeouts = useCallback(() => {
+        if (loadTimeoutRef.current) {
+            clearTimeout(loadTimeoutRef.current);
+            loadTimeoutRef.current = null;
+        }
+        if (playAttemptRef.current) {
+            clearTimeout(playAttemptRef.current);
+            playAttemptRef.current = null;
+        }
+    }, []);
+
+    // Enhanced video loading function
+    const loadVideo = useCallback(() => {
+        const video = videoRef.current;
+        if (!video || loadAttempted || hasError) return;
+
+        setLoadAttempted(true);
+        setHasError(false);
+        triggerLoadingVibration();
+
+        try {
+            video.src = videoData[index].src;
+            video.load();
+            
+            // Set a timeout to handle load failures
+            loadTimeoutRef.current = setTimeout(() => {
+                if (!loaded && !hasError) {
+                    console.log(`Video ${index} load timeout`);
+                    setHasError(true);
+                    triggerVibration('error');
+                }
+            }, 10000); // 10 second timeout
+            
+        } catch (error) {
+            console.error('Video load error:', error);
+            setHasError(true);
+            triggerVibration('error');
+        }
+    }, [index, videoData, loadAttempted, hasError, loaded, triggerLoadingVibration, triggerVibration]);
 
     // Enhanced video event handlers with comprehensive vibration feedback
     const handleLoadedData = useCallback(() => {
+        clearTimeouts();
+        setLoaded(true);
         setCanPlay(true);
+        setHasError(false);
+        
         if (isActive) {
             triggerSuccessVibration(); // Feedback when video is ready
         }
-    }, [isActive, triggerSuccessVibration]);
+    }, [isActive, triggerSuccessVibration, clearTimeouts]);
+
+    const handleCanPlay = useCallback(() => {
+        setCanPlay(true);
+        setHasError(false);
+    }, []);
 
     const handlePlay = useCallback(() => {
         setIsPlaying(true);
         triggerVibration('play', 1.1); // Slightly stronger play vibration
-        if (intensityVibrationEnabled) {
+        if (intensityVibrationEnabled && isActive) {
             setupAudioAnalysis();
         }
-    }, [triggerVibration, intensityVibrationEnabled, setupAudioAnalysis]);
+    }, [triggerVibration, intensityVibrationEnabled, setupAudioAnalysis, isActive]);
 
     const handlePause = useCallback(() => {
         setIsPlaying(false);
@@ -292,13 +352,55 @@ const VideoCard = ({
         }
     }, [isActive, isMobile, triggerVibration]);
 
-    // Enhanced play/pause with error handling vibration
+    const handleError = useCallback((e) => {
+        console.error(`Video ${index} error:`, e);
+        setHasError(true);
+        setCanPlay(false);
+        setIsPlaying(false);
+        triggerVibration('error');
+        clearTimeouts();
+    }, [index, triggerVibration, clearTimeouts]);
+
+    const handleLoadStart = useCallback(() => {
+        if (isActive) {
+            triggerVibration('loading', 0.6);
+        }
+    }, [isActive, triggerVibration]);
+
+    // Enhanced play/pause with error handling and retry logic
     const togglePlayPause = useCallback(async () => {
         const video = videoRef.current;
-        if (!video || !canPlay) return;
+        if (!video) return;
 
         // Touch feedback for interaction
         triggerTouchFeedback('medium');
+
+        // If video hasn't been loaded yet, load it first
+        if (!loaded && !loadAttempted && !hasError) {
+            loadVideo();
+            // Wait a bit for the video to load before trying to play
+            playAttemptRef.current = setTimeout(() => {
+                if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+                    togglePlayPause();
+                }
+            }, 1000);
+            return;
+        }
+
+        // If there's an error, try to reload
+        if (hasError) {
+            setHasError(false);
+            setLoadAttempted(false);
+            setLoaded(false);
+            loadVideo();
+            return;
+        }
+
+        // If video is not ready, wait for it
+        if (!canPlay && video.readyState < 2) {
+            console.log('Video not ready, waiting...');
+            return;
+        }
 
         try {
             if (video.paused || video.ended) {
@@ -314,8 +416,13 @@ const VideoCard = ({
         } catch (error) {
             console.error('Video play/pause error:', error);
             triggerVibration('error'); // Error feedback
+            
+            // Try to reload the video if play fails
+            if (error.name === 'NotSupportedError' || error.name === 'NotAllowedError') {
+                setHasError(true);
+            }
         }
-    }, [canPlay, triggerTouchFeedback, triggerVibration]);
+    }, [canPlay, loaded, loadAttempted, hasError, triggerTouchFeedback, triggerVibration, loadVideo]);
 
     // Enhanced card click with comprehensive feedback
     const handleCardClick = useCallback((e) => {
@@ -332,23 +439,23 @@ const VideoCard = ({
         }
     }, [isActive, togglePlayPause, setCurrentVideoIndex, index, triggerTouchFeedback, triggerVibration]);
 
-    // Enhanced video loading with feedback
+    // Load video when it becomes active or is the next video
     useEffect(() => {
-        const video = videoRef.current;
-        if (!video || loaded) return;
-
-        // Load current video and next video
-        if (index === currentVideoIndex || index === (currentVideoIndex + 1) % videoData.length) {
-            // Loading feedback
+        if (!loaded && !loadAttempted && !hasError) {
+            // Load current video immediately
             if (index === currentVideoIndex) {
-                triggerLoadingVibration();
+                loadVideo();
             }
-            
-            video.src = videoData[index].src;
-            video.load();
-            setLoaded(true);
+            // Preload next video
+            else if (index === (currentVideoIndex + 1) % videoData.length) {
+                setTimeout(() => {
+                    if (!loaded && !loadAttempted && !hasError) {
+                        loadVideo();
+                    }
+                }, 2000); // Delay preloading
+            }
         }
-    }, [index, currentVideoIndex, videoData, loaded, triggerLoadingVibration]);
+    }, [index, currentVideoIndex, videoData.length, loaded, loadAttempted, hasError, loadVideo]);
 
     // Setup video event listeners
     useEffect(() => {
@@ -356,19 +463,25 @@ const VideoCard = ({
         if (!video) return;
 
         video.addEventListener('loadeddata', handleLoadedData);
+        video.addEventListener('canplay', handleCanPlay);
         video.addEventListener('play', handlePlay);
         video.addEventListener('pause', handlePause);
         video.addEventListener('ended', handleEnded);
         video.addEventListener('timeupdate', handleTimeUpdate);
+        video.addEventListener('error', handleError);
+        video.addEventListener('loadstart', handleLoadStart);
 
         return () => {
             video.removeEventListener('loadeddata', handleLoadedData);
+            video.removeEventListener('canplay', handleCanPlay);
             video.removeEventListener('play', handlePlay);
             video.removeEventListener('pause', handlePause);
             video.removeEventListener('ended', handleEnded);
             video.removeEventListener('timeupdate', handleTimeUpdate);
+            video.removeEventListener('error', handleError);
+            video.removeEventListener('loadstart', handleLoadStart);
         };
-    }, [handleLoadedData, handlePlay, handlePause, handleEnded, handleTimeUpdate]);
+    }, [handleLoadedData, handleCanPlay, handlePlay, handlePause, handleEnded, handleTimeUpdate, handleError, handleLoadStart]);
 
     // Enhanced active card changes with transition feedback
     useEffect(() => {
@@ -396,19 +509,21 @@ const VideoCard = ({
             }
 
             // Ensure video is loaded
-            if (!loaded) {
-                video.src = videoData[index].src;
-                video.load();
-                setLoaded(true);
+            if (!loaded && !loadAttempted && !hasError) {
+                loadVideo();
             }
 
-            // Auto-play if enabled
-            if (autoplayEnabled && canPlay) {
-                video.currentTime = 0;
-                video.play().catch(error => {
-                    console.error('Auto-play failed:', error);
-                    triggerVibration('warning'); // Auto-play failed feedback
-                });
+            // Auto-play if enabled and video is ready
+            if (autoplayEnabled && canPlay && loaded && !hasError) {
+                playAttemptRef.current = setTimeout(() => {
+                    if (video.paused && video.readyState >= 2) {
+                        video.currentTime = 0;
+                        video.play().catch(error => {
+                            console.error('Auto-play failed:', error);
+                            triggerVibration('warning'); // Auto-play failed feedback
+                        });
+                    }
+                }, 300); // Small delay to ensure everything is ready
             }
         } else {
             // Deactivate card
@@ -425,19 +540,38 @@ const VideoCard = ({
             }
             setIsPlaying(false);
             cleanupAudioAnalysis();
+            clearTimeouts();
         }
-    }, [isActive, loaded, autoplayEnabled, canPlay, isMobile, videoData, index, cleanupAudioAnalysis, triggerVibration]);
+    }, [isActive, loaded, loadAttempted, hasError, autoplayEnabled, canPlay, isMobile, cleanupAudioAnalysis, triggerVibration, loadVideo, clearTimeouts]);
+
+    // Reset states when video index changes significantly (not just next/prev)
+    useEffect(() => {
+        const diff = Math.abs(index - currentVideoIndex);
+        if (diff > 1 && diff < videoData.length - 1) {
+            // Reset states for videos that are far from current
+            if (!isActive && loaded) {
+                setLoaded(false);
+                setLoadAttempted(false);
+                setCanPlay(false);
+                setHasError(false);
+                setIsPlaying(false);
+                cleanupAudioAnalysis();
+                clearTimeouts();
+            }
+        }
+    }, [currentVideoIndex, index, videoData.length, isActive, loaded, cleanupAudioAnalysis, clearTimeouts]);
 
     // Cleanup on unmount
     useEffect(() => {
         return () => {
             cleanupAudioAnalysis();
+            clearTimeouts();
         };
-    }, [cleanupAudioAnalysis]);
+    }, [cleanupAudioAnalysis, clearTimeouts]);
     
     return (
         <div 
-            className={`video-card ${isActive ? 'active' : ''}`}
+            className={`video-card ${isActive ? 'active' : ''} ${hasError ? 'error' : ''}`}
             ref={cardRef}
             onClick={handleCardClick}
             onTouchStart={() => isMobile && triggerTouchFeedback('light')} // Light touch feedback
@@ -453,15 +587,32 @@ const VideoCard = ({
                     ref={videoRef}
                     playsInline
                     preload="none"
-                    onLoadStart={() => isActive && triggerVibration('loading', 0.6)}
-                    onError={() => triggerVibration('error')}
+                    muted={false}
                 />
                 <div className="card-overlay"></div>
                 <div className="progress-bar" ref={progressRef}></div>
                 <div className="model-info">{videoData[index].model}</div>
                 
+                {/* Error indicator */}
+                {hasError && (
+                    <div className="error-indicator">
+                        <svg viewBox="0 0 24 24" width="24" height="24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="red" />
+                        </svg>
+                        <span>Tap to retry</span>
+                    </div>
+                )}
+                
+                {/* Loading indicator */}
+                {loadAttempted && !loaded && !hasError && (
+                    <div className="loading-indicator">
+                        <div className="loading-spinner"></div>
+                        <span>Loading...</span>
+                    </div>
+                )}
+                
                 {/* Enhanced Play/Pause Button with touch feedback */}
-                {isActive && !isPlaying && (
+                {isActive && !isPlaying && canPlay && !hasError && (
                     <div 
                         className="play-pause-overlay show-controls"
                         onTouchStart={() => isMobile && triggerTouchFeedback('strong')}
